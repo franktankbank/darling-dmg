@@ -15,6 +15,9 @@
 #include "SubReader.h"
 #include "exceptions.h"
 
+#include <libxml/parser.h>
+#include <libxml/xpath.h>
+
 static uint64_t findKolyBlock(std::shared_ptr<Reader> reader)
 {
 	if (reader->length() < 1024)
