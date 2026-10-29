@@ -3,8 +3,7 @@
 #include "be.h"
 #include <iostream>
 #include <cstring>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
+#include <ctype.h>
 #include <memory>
 #include <sstream>
 #include "DMGPartition.h"
@@ -29,7 +28,7 @@ DMGDisk::DMGDisk(std::shared_ptr<Reader> reader)
 
 	if (be(m_udif.fUDIFSignature) != UDIF_SIGNATURE)
 		throw io_error("Invalid KOLY block signature");
-	
+
 	loadKoly(m_udif);
 }
 
@@ -72,11 +71,11 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 	if (xpathObj && xpathObj->nodesetval)
 		simpleWayOK = loadPartitionElements(xpathContext, xpathObj->nodesetval);
-	
+
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathContext);
 //#else
-	
+
 	if (!simpleWayOK)
 	{
 		std::shared_ptr<Reader> rm1, r1;
@@ -102,7 +101,7 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 			m_partitions = pdisk->partitions();
 
 			delete pdisk;
-		}	
+		}
 	}
 //#endif
 }
@@ -121,15 +120,15 @@ bool DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 		xpathContext->node = nodes->nodeTab[i];
 
 		xpathObj = xmlXPathEvalExpression((const xmlChar*) "string(key[text()='CFName']/following-sibling::string)", xpathContext);
-		
+
 		if (!xpathObj || !xpathObj->stringval)
 			xpathObj = xmlXPathEvalExpression((const xmlChar*) "string(key[text()='Name']/following-sibling::string)", xpathContext);
 
 		if (!xpathObj || !xpathObj->stringval)
 			throw io_error("Invalid XML data, partition Name key not found");
-		
+
 		table = loadBLKXTableForPartition(i);
-		
+
 		if (table)
 		{
 			part.offset = be(table->firstSectorNumber) * 512;
@@ -143,7 +142,7 @@ bool DMGDisk::loadPartitionElements(xmlXPathContextPtr xpathContext, xmlNodeSetP
 		xmlXPathFreeObject(xpathObj);
 		//delete table;
 	}
-	
+
 	return true;
 }
 
@@ -164,10 +163,10 @@ bool DMGDisk::parseNameAndType(const std::string& nameAndType, std::string& name
 
 	type = nameAndType.substr(paren+1, (colon - paren) - 1);
 	space = type.rfind(' ');
-	
+
 	if (space != std::string::npos && space == type.length()-1)
 		type.resize(type.length() - 1); // remove space at the end
-	
+
 	return true;
 }
 
@@ -188,39 +187,83 @@ BLKXTable* DMGDisk::loadBLKXTableForPartition(int index)
 	{
 		// load data from base64
 		std::vector<uint8_t> data;
-		
+
 		base64Decode((char*)xpathObj->stringval, data);
 		rv = static_cast<BLKXTable*>(operator new(data.size()));
-		
+
 		memcpy(rv, &data[0], data.size());
 	}
 
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathContext);
-	
+
 	return rv;
+}
+
+static inline bool is_base64(uint8_t c) {
+	return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
 bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& output)
 {
-	BIO *b64, *bmem;
-	std::unique_ptr<char[]> buffer(new char[input.length()]);
-	int rd;
+	static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    auto b64_input = input.substr(0, input.find_last_not_of("\r\t\f\v"));
+	const int in_len_const = input.size();
+	int in_len = input.size();
+	int i = 0;
+	int j = 0;
+	int in_ = 0;
+	uint8_t char_array_4[4], char_array_3[3];
 
-	b64 = BIO_new(BIO_f_base64());
-	bmem = BIO_new_mem_buf((void*) b64_input.c_str(), b64_input.length());
-	bmem = BIO_push(b64, bmem);
-	//BIO_set_flags(bmem, BIO_FLAGS_BASE64_NO_NL);
+	while (in_len-- && (input[in_] != '='))
+	{
+		while (!is_base64(input[in_])) // this loop skips non base64 characters
+		{
+			if (in_ < in_len_const - 1)
+			{
+				in_++;
+				continue;
+			}
+			else
+				break;
+		}
 
-	rd = BIO_read(bmem, buffer.get(), b64_input.length());
+		if (in_ == in_len_const - 1)
+			break;
 
-	if (rd > 0)
-		output.assign(buffer.get(), buffer.get()+rd);
+		char_array_4[i++] = input[in_]; in_++;
+		if (i == 4)
+		{
+			for (i = 0; i < 4; i++)
+				char_array_4[i] = base64_chars.find(char_array_4[i]);
 
-	BIO_free_all(bmem);
-	return rd >= 0;
+			char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+			char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+			char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+			for (i = 0; (i < 3); i++)
+				output.push_back(char_array_3[i]);
+			i = 0;
+		}
+	}
+
+	if (i)
+	{
+		for (j = i; j < 4; j++)
+			char_array_4[j] = 0;
+
+		for (j = 0; j < 4; j++)
+			char_array_4[j] = base64_chars.find(char_array_4[j]);
+
+		char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+		char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+		char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+		for (j = 0; (j < i - 1); j++)
+			output.push_back(char_array_3[j]);
+	}
+
+	return (output.size() > 0);
 }
 
 std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
@@ -228,10 +271,10 @@ std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 	for (int i = -1;; i++)
 	{
 		BLKXTable* table = loadBLKXTableForPartition(i);
-		
+
 		if (!table)
 			continue;
-		
+
 		if (be(table->firstSectorNumber)*512 == m_partitions[index].offset)
 		{
 			std::stringstream partName;
@@ -254,10 +297,10 @@ std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 						);
 			}
 		}
-		
+
 		delete table;
 	}
-	
+
 	return nullptr;
 }
 
