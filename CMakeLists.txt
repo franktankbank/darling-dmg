@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
+cmake_policy(SET CMP0167 NEW)
+project(darling-dmg)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(darling-dmg)
 
@@ -98,7 +104,7 @@ else (NOT DARLING)
 		${FUSE_INCLUDE_DIRS}
 	)
 
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -nostdinc")
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -nostdinc")
 
 	wrap_elf(fuse libfuse.so)
 
