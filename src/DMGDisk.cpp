@@ -1,4 +1,5 @@
 #include "DMGDisk.h"
+#include <cassert>
 #include <stdexcept>
 #include "be.h"
 #include <iostream>
@@ -6,6 +7,7 @@
 #include <ctype.h>
 #include <memory>
 #include <sstream>
+#include <limits>
 #include "DMGPartition.h"
 #include "AppleDisk.h"
 #include "GPTDisk.h"
@@ -65,11 +67,12 @@ void DMGDisk::loadKoly(const UDIFResourceFile& koly)
 
 	offset = be(koly.fUDIFXMLOffset);
 	length = be(koly.fUDIFXMLLength);
+	assert(length <= std::numeric_limits<int32_t>::max());
 
 	xmlData.reset(new char[length]);
-	m_reader->read(xmlData.get(), length, offset);
+	m_reader->read(xmlData.get(), (int32_t)length, offset); // safe cast because of assert.
 
-	m_kolyXML = xmlParseMemory(xmlData.get(), length);
+	m_kolyXML = xmlParseMemory(xmlData.get(), (int32_t)length); // safe cast because of assert.
 
 //#if 0 // Asian copies of OS X put crap UTF characters into XML data making type/name parsing unreliable
 	xpathContext = xmlXPathNewContext(m_kolyXML);
@@ -215,6 +218,8 @@ static inline bool is_base64(uint8_t c) {
 
 bool DMGDisk::base64Decode(const std::string& input, std::vector<uint8_t>& output)
 {
+	assert(input.length() <= std::numeric_limits<int>::max());
+
 	static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 	const int in_len_const = input.size();
@@ -287,8 +292,7 @@ std::shared_ptr<Reader> DMGDisk::readerForPartition(int index)
 		if (be(table->firstSectorNumber)*512 == m_partitions[index].offset)
 		{
 			std::stringstream partName;
-			uint64_t l = m_reader->length();
-			uint32_t data_offset = be(m_udif.fUDIFDataForkOffset);
+			uint64_t data_offset = be(m_udif.fUDIFDataForkOffset);
 
 			partName << "part-" << index;
 
