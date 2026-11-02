@@ -90,19 +90,25 @@ SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 target_link_libraries(darling-dmg -lfuse3 dmg)
 install(TARGETS darling-dmg RUNTIME DESTINATION bin)
 
+add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
+target_compile_features(darling-dmg-extract PRIVATE cxx_std_11)
+target_link_libraries(darling-dmg-extract dmg)
+install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
+
 # This is used in Darling build.
 else (NOT DARLING)
-	include(wrap_elf)
 	include(darling_exe)
 	include(FindPkgConfig)
 
 	add_definitions(-D_FILE_OFFSET_BITS=64 -DCOMPILE_WITH_LZFSE=1)
 
-	pkg_check_modules(FUSE REQUIRED fuse)
-
-	include_directories(
-		${FUSE_INCLUDE_DIRS}
-	)
+	option(DARLING_DMG_ENABLE_FUSE "Build guest hdiutil with FUSE mounting support" OFF)
+	if (DARLING_DMG_ENABLE_FUSE)
+		include(wrap_elf)
+		pkg_check_modules(FUSE REQUIRED fuse)
+		include_directories(${FUSE_INCLUDE_DIRS})
+		wrap_elf(fuse libfuse.so)
+	endif()
 
 	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -nostdinc")
 
@@ -113,7 +119,12 @@ else (NOT DARLING)
 		src/main-hdiutil.cpp
 	)
 
-	target_link_libraries(hdiutil fuse icucore z bz2 crypto44 xml2 iconv lzfse)
+	if (DARLING_DMG_ENABLE_FUSE)
+		target_link_libraries(hdiutil fuse)
+	else()
+		target_compile_definitions(hdiutil PRIVATE DARLING_DMG_NO_FUSE)
+	endif()
+	target_link_libraries(hdiutil icucore z bz2 crypto44 xml2 iconv lzfse)
 	install(TARGETS hdiutil DESTINATION libexec/darling/usr/bin)
 
 endif (NOT DARLING)
