@@ -126,21 +126,25 @@ target_sources(dmg PRIVATE ${SOURCES})
 target_link_libraries(dmg ICU::uc ICU::data ZLIB::ZLIB BZip2::BZip2 ${LIBXML2_LIBRARY})
 install(TARGETS dmg DESTINATION lib)
 
-add_executable(darling-dmg
-	src/main-fuse.cpp
-)
+if (BUILD_DARLING_DMG)
+	add_executable(darling-dmg
+		src/main-fuse.cpp
+	)
+
+	target_link_libraries(darling-dmg -lfuse3 dmg)
+	install(TARGETS darling-dmg RUNTIME DESTINATION bin)
+endif (BUILD_DARLING_DMG)
 
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-target_link_libraries(darling-dmg -lfuse3 dmg)
-install(TARGETS darling-dmg RUNTIME DESTINATION bin)
-
-add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
-target_compile_features(darling-dmg-extract PRIVATE cxx_std_17)
-target_link_libraries(darling-dmg-extract dmg)
-install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
+if (BUILD_DARLING_DMG_EXTRACT)
+	add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
+	target_compile_features(darling-dmg-extract PRIVATE cxx_std_17)
+	target_link_libraries(darling-dmg-extract dmg)
+	install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
+endif (BUILD_DARLING_DMG_EXTRACT)
 
 # This is used in Darling build.
 else (NOT DARLING)

@@ -22,7 +22,7 @@ public:
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
 	z_stream m_strm;
-	virtual int32_t decompress(void* output, typeof(m_strm.avail_out) count);
+	virtual int32_t decompress(void* output, decltype(m_strm.avail_out) count);
 };
 
 class DMGDecompressor_Bzip2 : public DMGDecompressor
@@ -33,7 +33,7 @@ public:
 	virtual int32_t decompress(void* output, int32_t count, int64_t offset) override;
 private:
 	bz_stream m_strm;
-	virtual int32_t decompress(void* output, typeof(m_strm.avail_out) count);
+	virtual int32_t decompress(void* output, decltype(m_strm.avail_out) count);
 };
 
 class DMGDecompressor_ADC : public DMGDecompressor
@@ -80,10 +80,10 @@ int32_t DMGDecompressor::readSome(char** ptr)
 {
 	*ptr = m_buf;
 	int32_t rd = m_reader->read(m_buf, sizeof(m_buf), m_pos);
-	
+
 	if (rd <= 0)
 		throw io_error("DMGDecompressor cannot read from stream");
-	
+
 	return rd;
 }
 
@@ -114,12 +114,12 @@ DMGDecompressor_Zlib::~DMGDecompressor_Zlib()
 	inflateEnd(&m_strm);
 }
 
-int32_t DMGDecompressor_Zlib::decompress(void* output, typeof(m_strm.avail_out) count)
+int32_t DMGDecompressor_Zlib::decompress(void* output, decltype(m_strm.avail_out) count)
 {
 	int status;
 	char* input;
 	int32_t bytesRead;
-	
+
 #ifdef DEBUG
 	//std::cout << "zlib: Asked to provide " << outputBytes << " bytes\n";
 #endif
@@ -137,9 +137,9 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, typeof(m_strm.avail_out) 
 			m_strm.next_in = (uint8_t*)input;
 			m_strm.avail_in = (uint32_t)bytesRead;
 		}
-	
+
 		status = inflate(&m_strm, Z_SYNC_FLUSH);
-		
+
 		if (status == Z_STREAM_END)
 			return count - m_strm.avail_out;
 		else if (status < 0)
@@ -158,8 +158,8 @@ int32_t DMGDecompressor_Zlib::decompress(void* output, int32_t count, int64_t of
 
 	while (offset > 0)
 	{
-		char waste[4096];  // sizeof(waste) has to be < typeof(m_strm.avail_out) MAX
-		int32_t to_read = (typeof(m_strm.avail_out))std::min<uint64_t>(sizeof(waste), offset);  // safe cast if sizeof(waste) < typeof(m_strm.avail_out) MAX
+		char waste[4096];  // sizeof(waste) has to be < decltype(m_strm.avail_out) MAX
+		int32_t to_read = (decltype(m_strm.avail_out))std::min<uint64_t>(sizeof(waste), offset);  // safe cast if sizeof(waste) < decltype(m_strm.avail_out) MAX
 		int32_t bytesDecompressed = decompress(waste, to_read);
 		if (bytesDecompressed <= 0)
 			return bytesDecompressed;
@@ -182,12 +182,12 @@ DMGDecompressor_Bzip2::~DMGDecompressor_Bzip2()
 	BZ2_bzDecompressEnd(&m_strm);
 }
 
-int32_t DMGDecompressor_Bzip2::decompress(void* output, typeof(m_strm.avail_out) count)
+int32_t DMGDecompressor_Bzip2::decompress(void* output, decltype(m_strm.avail_out) count)
 {
 	int status;
 	char* input;
 	int32_t bytesRead;
-	
+
 #ifdef DEBUG
 	//std::cout << "bz2: Asked to provide " << outputBytes << " bytes\n";
 #endif
@@ -205,7 +205,7 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, typeof(m_strm.avail_out)
 			m_strm.next_in = input;
 			m_strm.avail_in = (uint32_t)bytesRead;
 		}
-	
+
 		status = BZ2_bzDecompress(&m_strm);
 
 		if (status == BZ_STREAM_END)
@@ -226,8 +226,8 @@ int32_t DMGDecompressor_Bzip2::decompress(void* output, int32_t count, int64_t o
 
 	while (offset > 0)
 	{
-		char waste[4096];  // sizeof(waste) has to be < typeof(m_strm.avail_out) MAX
-		int32_t to_read = (typeof(m_strm.avail_out))std::min<uint64_t>(sizeof(waste), offset);  // safe cast if sizeof(waste) < typeof(m_strm.avail_out) MAX
+		char waste[4096];  // sizeof(waste) has to be < decltype(m_strm.avail_out) MAX
+		int32_t to_read = (decltype(m_strm.avail_out))std::min<uint64_t>(sizeof(waste), offset);  // safe cast if sizeof(waste) < decltype(m_strm.avail_out) MAX
 		int32_t bytesDecompressed = decompress(waste, to_read);
 		if (bytesDecompressed <= 0)
 			return bytesDecompressed;
@@ -259,7 +259,7 @@ int32_t DMGDecompressor_ADC::decompress(void* output, int32_t count, int64_t off
 
 		if (nb_input_char_used == 0)
 			throw io_error("nb_input_char_used == 0");
-		
+
 		if ( bytes_written >= offset+countLeft) {
 			memcpy(output, decrompressBuffer+offset, countLeft);
 			countLeft = 0;
@@ -293,7 +293,7 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
 
 	char* input = nullptr;
 	char *inputBig = nullptr;
-	
+
 	int32_t inputBytes = readSome(&input);
 	if (inputBytes < 0) // read error
 		return inputBytes;
@@ -312,13 +312,13 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
 			int32_t nextReadBytes = readSome(&input);
 			if (nextReadBytes < 0) // read error
 				return nextReadBytes;
-			
+
 			memcpy(inputBig + inputBytes, input, nextReadBytes);
 
 			inputBytes += nextReadBytes; // nextReadBytes is >=0 here, so inputBytes is still >= 0.
 
 			processed(nextReadBytes);
-		} 
+		}
 		while ((uint32_t)inputBytes < readerTotalSize);
 
 		input = inputBig;
@@ -333,7 +333,7 @@ int32_t DMGDecompressor_LZFSE::decompress(void* output, int32_t outputBytes)
 		delete[] inputBig;
 	else
 		processed(inputBytes);
-	
+
 	return out_size;
 }
 
