@@ -138,7 +138,7 @@ target_link_libraries(darling-dmg -lfuse3 dmg)
 install(TARGETS darling-dmg RUNTIME DESTINATION bin)
 
 add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
-target_compile_features(darling-dmg-extract PRIVATE cxx_std_11)
+target_compile_features(darling-dmg-extract PRIVATE cxx_std_17)
 target_link_libraries(darling-dmg-extract dmg)
 install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
 
