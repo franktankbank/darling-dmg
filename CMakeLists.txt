@@ -8,6 +8,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_INSTALL_DO_STRIP ON)
 
+include(CheckIPOSupported)
+check_ipo_supported(RESULT supported)
+if(supported)
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
 set(
   CMAKE_MODULE_PATH
     ${CMAKE_MODULE_PATH}
