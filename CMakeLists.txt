@@ -12,6 +12,7 @@ option(WITH_LTO "Build project with lto" ON)
 option(WITH_TESTS "Enable tests" OFF)
 option(BUILD_DARLING_DMG "Build darling-dmg executable" ON)
 option(BUILD_DARLING_DMG_EXTRACT "Build darling-dmg-extract executable" ON)
+option(INSTALL_C_HEADERS "Install c wrapper headers" OFF)
 
 if (WITH_STRIP)
 	set(CMAKE_INSTALL_DO_STRIP ON)
@@ -56,6 +57,8 @@ set(
 	"ResourceFork.cpp"
 	"unichar.cpp"
 	"SubReader.cpp"
+	"DMGExtractor.cpp"
+	"DMGExtractorWrapper.cpp"
 )
 
 list(TRANSFORM SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
@@ -139,11 +142,22 @@ if (NOT DARLING)
 	set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 	if (BUILD_DARLING_DMG_EXTRACT)
-		add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
+		add_executable(darling-dmg-extract src/main-extract.cpp)
 		target_compile_features(darling-dmg-extract PRIVATE cxx_std_17)
 		target_link_libraries(darling-dmg-extract dmg)
 		install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
 	endif (BUILD_DARLING_DMG_EXTRACT)
+
+	if (INSTALL_C_HEADERS)
+		target_sources(dmg PUBLIC
+			FILE_SET public_headers
+			TYPE HEADERS
+			BASE_DIRS src
+			FILES src/dmg_extractor_wrapper.h
+		)
+
+		install(TARGETS dmg FILE_SET public_headers)
+	endif (INSTALL_C_HEADERS)
 
 # This is used in Darling build.
 else (NOT DARLING)
