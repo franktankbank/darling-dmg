@@ -15,19 +15,19 @@ option(BUILD_DARLING_DMG_EXTRACT "Build darling-dmg-extract executable" ON)
 
 if (WITH_STRIP)
 	set(CMAKE_INSTALL_DO_STRIP ON)
-endif(WITH_STRIP)
+endif (WITH_STRIP)
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT supported)
-if(supported)
+if (supported)
 	if (WITH_LTO)
 		set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-	endif(WITH_LTO)
-endif()
+	endif (WITH_LTO)
+endif (supported)
 
 set(
-  CMAKE_MODULE_PATH
-    ${CMAKE_MODULE_PATH}
+	CMAKE_MODULE_PATH
+	${CMAKE_MODULE_PATH}
 	"${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/"
 )
 
@@ -63,88 +63,87 @@ list(TRANSFORM SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
 # This part of CMakeLists.txt is for when building darling-dmg
 # as a standalone FUSE module outside of Darling.
 if (NOT DARLING)
+	if (BUILD_DARLING_DMG)
+		add_definitions(-D_FILE_OFFSET_BITS=64)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
+	endif (BUILD_DARLING_DMG)
 
-if (BUILD_DARLING_DMG)
-	add_definitions(-D_FILE_OFFSET_BITS=64)
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
-endif (BUILD_DARLING_DMG)
+	include(FindLibXml2)
 
-include(FindLibXml2)
+	find_package(LibXml2 REQUIRED)
+	include_directories(${LIBXML2_INCLUDE_DIR})
 
-find_package(LibXml2 REQUIRED)
-include_directories(${LIBXML2_INCLUDE_DIR})
+	set(ICU_GENCNVAL_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_ICUINFO_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENBRK_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_ICU-CONFIG_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENRB_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENCCODE_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENCFU_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENCMN_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENDICT_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENNORM2_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_GENSPREP_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_ICUPKG_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_UCONV_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_MAKECONV_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_PKGDATA_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	set(ICU_DERB_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
 
-set(ICU_GENCNVAL_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_ICUINFO_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENBRK_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_ICU-CONFIG_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENRB_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENCCODE_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENCFU_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENCMN_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENDICT_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENNORM2_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_GENSPREP_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_ICUPKG_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_UCONV_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_MAKECONV_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_PKGDATA_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-set(ICU_DERB_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
+	find_package(ICU COMPONENTS uc data REQUIRED)
 
-find_package(ICU COMPONENTS uc data REQUIRED)
+	find_package(ZLIB REQUIRED)
 
-find_package(ZLIB REQUIRED)
+	find_package(BZip2 REQUIRED)
 
-find_package(BZip2 REQUIRED)
+	if (WITH_TESTS)
+		enable_testing()
+		find_package(Boost COMPONENTS unit_test_framework REQUIRED)
 
-if (WITH_TESTS)
-	enable_testing()
-	find_package(Boost COMPONENTS unit_test_framework REQUIRED)
+		add_definitions(-DBOOST_TEST_DYN_LINK ) # -DDEBUG
 
-	add_definitions(-DBOOST_TEST_DYN_LINK ) # -DDEBUG
+		set(CacheTest_SRC
+			test/CacheTest.cpp
+			src/CacheZone.cpp
+			src/CachedReader.cpp
+			src/Reader.cpp
+			src/MemoryReader.cpp
+		)
 
-	set(CacheTest_SRC
-		test/CacheTest.cpp
-		src/CacheZone.cpp
-		src/CachedReader.cpp
-		src/Reader.cpp
-		src/MemoryReader.cpp
-	)
+		add_executable(CacheTest ${CacheTest_SRC})
+		target_link_libraries(CacheTest ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
+		add_test(NAME CacheTest COMMAND CacheTest)
+	endif (WITH_TESTS)
 
-	add_executable(CacheTest ${CacheTest_SRC})
-	target_link_libraries(CacheTest ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
-	add_test(NAME CacheTest COMMAND CacheTest)
-endif (WITH_TESTS)
+	if (WITH_STATIC)
+		add_library(dmg STATIC)
+	else (WITH_STATIC)
+		add_library(dmg SHARED)
+	endif (WITH_STATIC)
 
-if (WITH_STATIC)
-	add_library(dmg STATIC)
-else (WITH_STATIC)
-	add_library(dmg SHARED)
-endif(WITH_STATIC)
+	target_sources(dmg PRIVATE ${SOURCES})
+	target_link_libraries(dmg ICU::uc ICU::data ZLIB::ZLIB BZip2::BZip2 ${LIBXML2_LIBRARY})
+	install(TARGETS dmg DESTINATION lib)
 
-target_sources(dmg PRIVATE ${SOURCES})
-target_link_libraries(dmg ICU::uc ICU::data ZLIB::ZLIB BZip2::BZip2 ${LIBXML2_LIBRARY})
-install(TARGETS dmg DESTINATION lib)
+	if (BUILD_DARLING_DMG)
+		add_executable(darling-dmg
+			src/main-fuse.cpp
+		)
 
-if (BUILD_DARLING_DMG)
-	add_executable(darling-dmg
-		src/main-fuse.cpp
-	)
+		target_link_libraries(darling-dmg -lfuse3 dmg)
+		install(TARGETS darling-dmg RUNTIME DESTINATION bin)
+	endif (BUILD_DARLING_DMG)
 
-	target_link_libraries(darling-dmg -lfuse3 dmg)
-	install(TARGETS darling-dmg RUNTIME DESTINATION bin)
-endif (BUILD_DARLING_DMG)
+	set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+	set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+	set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-if (BUILD_DARLING_DMG_EXTRACT)
-	add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
-	target_compile_features(darling-dmg-extract PRIVATE cxx_std_17)
-	target_link_libraries(darling-dmg-extract dmg)
-	install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
-endif (BUILD_DARLING_DMG_EXTRACT)
+	if (BUILD_DARLING_DMG_EXTRACT)
+		add_executable(darling-dmg-extract src/main-extract.cpp src/DMGExtractor.cpp)
+		target_compile_features(darling-dmg-extract PRIVATE cxx_std_17)
+		target_link_libraries(darling-dmg-extract dmg)
+		install(TARGETS darling-dmg-extract RUNTIME DESTINATION bin)
+	endif (BUILD_DARLING_DMG_EXTRACT)
 
 # This is used in Darling build.
 else (NOT DARLING)
@@ -161,7 +160,7 @@ else (NOT DARLING)
 		wrap_elf(fuse libfuse.so)
 	endif()
 
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -nostdinc")
+	decltype(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -nostdinc")
 
 	wrap_elf(fuse libfuse.so)
 
