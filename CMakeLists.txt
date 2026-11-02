@@ -6,12 +6,23 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_INSTALL_DO_STRIP ON)
+option(WITH_STATIC "Build libdmg as a static library" OFF)
+option(WITH_STRIP "Strip executables on install" ON)
+option(WITH_LTO "Build project with lto" ON)
+option(WITH_TESTS "Enable tests" OFF)
+option(BUILD_DARLING_DMG "Build darling-dmg executable" ON)
+option(BUILD_DARLING_DMG_EXTRACT "Build darling-dmg-extract executable" ON)
+
+if (WITH_STRIP)
+	set(CMAKE_INSTALL_DO_STRIP ON)
+endif(WITH_STRIP)
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT supported)
 if(supported)
-	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+	if (WITH_LTO)
+		set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+	endif(WITH_LTO)
 endif()
 
 set(
@@ -53,8 +64,10 @@ list(TRANSFORM SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
 # as a standalone FUSE module outside of Darling.
 if (NOT DARLING)
 
-add_definitions(-D_FILE_OFFSET_BITS=64)
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
+if (BUILD_DARLING_DMG)
+	add_definitions(-D_FILE_OFFSET_BITS=64)
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
+endif (BUILD_DARLING_DMG)
 
 include(FindLibXml2)
 
@@ -103,7 +116,12 @@ if (WITH_TESTS)
 	add_test(NAME CacheTest COMMAND CacheTest)
 endif (WITH_TESTS)
 
-add_library(dmg SHARED)
+if (WITH_STATIC)
+	add_library(dmg STATIC)
+else (WITH_STATIC)
+	add_library(dmg SHARED)
+endif(WITH_STATIC)
+
 target_sources(dmg PRIVATE ${SOURCES})
 target_link_libraries(dmg ICU::uc ICU::data ZLIB::ZLIB BZip2::BZip2 ${LIBXML2_LIBRARY})
 install(TARGETS dmg DESTINATION lib)
