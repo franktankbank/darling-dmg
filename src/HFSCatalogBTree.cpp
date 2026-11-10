@@ -1,14 +1,11 @@
 #include "HFSCatalogBTree.h"
 #include "be.h"
 #include "exceptions.h"
-#include <unicode/unistr.h>
+#include "fastunicodecompare.h"
 #include "unichar.h"
+#include <utf8.h>
 #include <sstream>
 #include <cstring>
-using icu::UnicodeString;
-//static const int MAX_SYMLINKS = 50;
-
-extern UConverter *g_utf16be;
 
 HFSCatalogBTree::HFSCatalogBTree(std::shared_ptr<HFSFork> fork, HFSVolume* volume, std::shared_ptr<CacheZone> zone)
 	: HFSBTree(fork, zone, "Catalog"), m_volume(volume), m_hardLinkDirID(0)
@@ -28,88 +25,43 @@ int HFSCatalogBTree::caseInsensitiveComparator(const Key* indexKey, const Key* d
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
 	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
-	UnicodeString desiredName, indexName;
-	UErrorCode error = U_ZERO_ERROR;
 
-	//std::cout << "desired: " << be(catDesiredKey->parentID) << ", index: " << be(catIndexKey->parentID) << "\n";
-	if (be(catDesiredKey->parentID) < be(catIndexKey->parentID))
-	{
-		//std::cout << "\t -> bigger\n";
-		return 1;
-	}
-	else if (be(catDesiredKey->parentID) > be(catIndexKey->parentID))
-	{
-		//std::cout << "\t -> smaller\n";
-		return -1;
-	}
+	if (be(catDesiredKey->parentID) < be(catIndexKey->parentID)) return 1;
+	if (be(catDesiredKey->parentID) > be(catIndexKey->parentID)) return -1;
 
-	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, be(catDesiredKey->nodeName.length)*2, g_utf16be, error);
-	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, g_utf16be, error);
-	
 	// Hack for "\0\0\0\0HFS+ Private Data" which should come as last in ordering (issue #11)
-	if (indexName.charAt(0) == 0)
-		return 1;
-	else if (desiredName.charAt(0) == 0)
-		return -1;
-	
-	{
-		//std::string des, idx;
-		//desiredName.toUTF8String(des);
-		//indexName.toUTF8String(idx);
-		
-		int r = indexName.caseCompare(desiredName, 0);
-		
-		//std::cout << "desired: " << des << " - index: " << idx << " -> r=" << r << std::endl;
+	uint16_t firstIndex = (uint16_t)((catIndexKey->nodeName.string[0] << 8) | catIndexKey->nodeName.string[1]);
+	uint16_t firstDesired = (uint16_t)((catDesiredKey->nodeName.string[0] << 8) | catDesiredKey->nodeName.string[1]);
+	if (firstIndex == 0) return 1;
+	if (firstDesired == 0) return -1;
 
-		return r;
-	}
-	
-	return 0;
+	return FastUnicodeCompare(
+		(uint16_t*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length),
+		(uint16_t*)catDesiredKey->nodeName.string, be(catDesiredKey->nodeName.length)
+	);
 }
 
 int HFSCatalogBTree::caseSensitiveComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
 	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
-	UnicodeString desiredName, indexName;
-	UErrorCode error = U_ZERO_ERROR;
 
-	if (be(catDesiredKey->parentID) < be(catIndexKey->parentID))
-		return 1;
-	else if (be(catDesiredKey->parentID) > be(catIndexKey->parentID))
-		return -1;
+	if (be(catDesiredKey->parentID) < be(catIndexKey->parentID)) return 1;
+	if (be(catDesiredKey->parentID) > be(catIndexKey->parentID)) return -1;
 
-	desiredName = UnicodeString((char*)catDesiredKey->nodeName.string, be(catDesiredKey->nodeName.length)*2, g_utf16be, error);
-	indexName = UnicodeString((char*)catIndexKey->nodeName.string, be(catIndexKey->nodeName.length)*2, g_utf16be, error);
-	
-	// Hack for "\0\0\0\0HFS+ Private Data" which should come as last in ordering (issue #11)
-	if (indexName.charAt(0) == 0)
-		return 1;
-	else if (desiredName.charAt(0) == 0)
-		return 1;
+	uint16_t indexLength = be(catIndexKey->nodeName.length);
+	uint16_t desiredLength = be(catDesiredKey->nodeName.length);
+	uint16_t minLength = std::min(indexLength, desiredLength);
 
-	if (desiredName.length() > 0)
-	{
-		//std::string des, idx;
-		//desiredName.toUTF8String(des);
-		//indexName.toUTF8String(idx);
-		
-		int r = indexName.caseCompare(desiredName, 0);
-		
-		// std::cout << "desired: " << des << " - index: " << idx << " -> r=" << r << std::endl;
-
-		return r;
-	}
-
-	return 0;
+	int cmp = memcmp(catIndexKey->nodeName.string, catDesiredKey->nodeName.string, minLength * 2);
+	if (cmp != 0) return cmp;
+	return (int)indexLength - (int)desiredLength;
 }
 
 int HFSCatalogBTree::idOnlyComparator(const Key* indexKey, const Key* desiredKey)
 {
 	const HFSPlusCatalogKey* catIndexKey = reinterpret_cast<const HFSPlusCatalogKey*>(indexKey);
 	const HFSPlusCatalogKey* catDesiredKey = reinterpret_cast<const HFSPlusCatalogKey*>(desiredKey);
-	
-	//std::cerr << "idOnly: desired: " << be(catDesiredKey->parentID) << ", index: " << be(catIndexKey->parentID) << std::endl;
 
 	if (be(catDesiredKey->parentID) > be(catIndexKey->parentID))
 		return -1;
@@ -186,14 +138,13 @@ std::shared_ptr<HFSPlusCatalogFileOrFolder> HFSCatalogBTree::findHFSPlusCatalogF
 	std::map<std::string, std::shared_ptr<HFSPlusCatalogFileOrFolder>> beContents;
 	for (std::shared_ptr<HFSBTreeNode> leafPtr : leaves)
 	{
-		//std::cerr << "**** Looking for elems with CNID " << be(key.parentID) << std::endl;
 		appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentIdAndName(leafPtr, be(key.parentID), elem, beContents);
 	}
 	if (beContents.size() == 0)
 		return nullptr;
 	if (beContents.size() > 1)
 		throw io_error("Multiple records with same name");
-	
+
 	return beContents.begin()->second;
 }
 
@@ -260,7 +211,7 @@ int HFSCatalogBTree::stat(std::string path, HFSPlusCatalogFileOrFolder* s)
 			last = leafNodeHl;
 	}
 	*s = *last;
-	
+
 	//std::cout << "File/folder flags: 0x" << std::hex << s->file.flags << std::endl;
 
 	return 0;
@@ -293,7 +244,7 @@ void HFSCatalogBTree::appendNameAndHFSPlusCatalogFileOrFolderFromLeafForParentId
 			case RecordType::kHFSPlusFolderRecord:
 			case RecordType::kHFSPlusFileRecord:
 			{
-				
+
 				// do NOT skip "\0\0\0\0HFS+ Private Data", we need it to get is folderID in constructor
 				if ( /* recordKey->nodeName.string[0] != 0 &&*/ be(recordKey->parentID) == cnid)
 				{
@@ -376,9 +327,9 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 				HFSPlusCatalogKey* key = node.getRecordKey<HFSPlusCatalogKey>(i);
 				UnicodeString keyName((char*)key->nodeName.string, be(key->nodeName.length)*2, g_utf16be, error);
 				std::string str;
-				
+
 				keyName.toUTF8String(str);
-	
+
 				// recurse down
 				uint32_t* childIndex = node.getRecordData<uint32_t>(i);
 #ifdef DEBUG
@@ -387,7 +338,7 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 #endif
 				dumpTree(be(*childIndex), depth+2);
 			}
-			
+
 			break;
 		}
 		case NodeKind::kBTLeafNode:
@@ -398,17 +349,17 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 				UErrorCode error = U_ZERO_ERROR;
 				UnicodeString keyName;
 				std::string str;
-				
+
 				recordKey = node.getRecordKey<HFSPlusCatalogKey>(i);
 				keyName = UnicodeString((char*)recordKey->nodeName.string, be(recordKey->nodeName.length)*2, g_utf16be, error);
 				keyName.toUTF8String(str);
-				
+
 #ifdef DEBUG
 				printf("Leaf Node(%4d,%4zd)  %s %s(%d)\n", nodeIndex, i, std::string(depth, ' ').c_str(), str.c_str(), be(recordKey->parentID));
 //				std::cout << "dumpTree(l): " << std::string(depth, ' ') << str << "(" << be(recordKey->parentID) << ")\n";
 #endif
 			}
-			
+
 			break;
 		}
 		case NodeKind::kBTHeaderNode:
@@ -416,7 +367,7 @@ void HFSCatalogBTree::dumpTree(int nodeIndex, int depth) const
 			break;
 		default:
 			std::cerr << "Invalid node kind! Kind: " << int(node.kind()) << std::endl;
-			
+
 	}
 }
 #endif
@@ -431,4 +382,3 @@ void HFSCatalogBTree::replaceChars(std::string& str, char oldChar, char newChar)
 		pos++;
 	}
 }
-

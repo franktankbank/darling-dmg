@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 cmake_policy(SET CMP0167 NEW)
-project(darling-dmg CXX)
+project(darling-dmg C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,9 +59,12 @@ set(
 	"SubReader.cpp"
 	"DMGExtractor.cpp"
 	"DMGExtractorWrapper.cpp"
+	"unicode_helpers.cpp"
 )
 
 list(TRANSFORM SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/extern/include)
 
 # This part of CMakeLists.txt is for when building darling-dmg
 # as a standalone FUSE module outside of Darling.
@@ -75,25 +78,6 @@ if (NOT DARLING)
 
 	find_package(LibXml2 REQUIRED)
 	include_directories(${LIBXML2_INCLUDE_DIR})
-
-	set(ICU_GENCNVAL_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_ICUINFO_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENBRK_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_ICU-CONFIG_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENRB_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENCCODE_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENCFU_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENCMN_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENDICT_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENNORM2_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_GENSPREP_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_ICUPKG_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_UCONV_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_MAKECONV_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_PKGDATA_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-	set(ICU_DERB_EXECUTABLE "" CACHE INTERNAL FILEPATH "")
-
-	find_package(ICU COMPONENTS uc data REQUIRED)
 
 	find_package(ZLIB REQUIRED)
 
@@ -124,8 +108,8 @@ if (NOT DARLING)
 		add_library(dmg SHARED)
 	endif (WITH_STATIC)
 
-	target_sources(dmg PRIVATE ${SOURCES})
-	target_link_libraries(dmg ICU::uc ICU::data ZLIB::ZLIB BZip2::BZip2 ${LIBXML2_LIBRARY})
+	target_sources(dmg PRIVATE ${SOURCES} extern/src/fastunicodecompare.c)
+	target_link_libraries(dmg ZLIB::ZLIB BZip2::BZip2 ${LIBXML2_LIBRARY})
 	install(TARGETS dmg DESTINATION lib)
 
 	if (BUILD_DARLING_DMG)
@@ -180,6 +164,7 @@ else (NOT DARLING)
 
 	add_darling_executable(hdiutil
 		${SOURCES}
+		extern/src/fastunicodecompare.c
 		src/main-hdiutil.cpp
 	)
 
